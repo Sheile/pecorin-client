@@ -11,8 +11,14 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -101,6 +107,11 @@ public class LocationDetectService extends Service {
             method.setEntity(new UrlEncodedFormEntity(params, "UTF-8"));
             DefaultHttpClient httpClient = new DefaultHttpClient();
             HttpResponse res = httpClient.execute(method);
+            try {
+              notifyNearUser(res);
+            } catch(Exception e) {
+              e.printStackTrace();
+            }
             Log.i(TAG, "locationId:"+locationId);
             Log.i(TAG, "response:"+res.getEntity().toString());
           } catch (UnsupportedEncodingException e) {
@@ -116,6 +127,28 @@ public class LocationDetectService extends Service {
         }          
       }
       
+    }
+
+    //	通知センターに通知を残す（pecoriできる人がいます)
+	private void notifyNearUser(HttpResponse res) throws Exception {
+      String body = EntityUtils.toString(res.getEntity(), "UTF-8");
+      JSONObject json = new JSONObject(body.toString());
+      JSONArray nearUsers = json.getJSONArray("near_users");
+      for(int i = 0; i < nearUsers.length(); i++) {
+        JSONObject user = nearUsers.getJSONObject(i);
+        String facebookId = user.getString("facebook_id");
+        String name = user.getString("name");
+
+        NotificationManager notificationManager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        Notification notification = new Notification(android.R.drawable.btn_default, "近くに" + name + "さんがいるようです。", System.currentTimeMillis());
+        notification.flags = Notification.FLAG_AUTO_CANCEL;
+
+        //	Notificationが選択された場合のIntent
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        PendingIntent contentIntent = PendingIntent.getActivity(LocationDetectService.this, 0, intent, 0);
+        notification.setLatestEventInfo(getApplicationContext(), "Pecori", "近くに" + name + "さんがいるようです。", contentIntent);
+        notificationManager.notify(R.string.app_name, notification);
+      }
     }
   }
 }
